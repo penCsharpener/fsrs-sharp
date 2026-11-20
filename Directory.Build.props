@@ -9,4 +9,18 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
   </PropertyGroup>
 
+  <!-- Single source of truth for the package version. -->
+  <PropertyGroup>
+    <!-- ts-fsrs release this port tracks; NuGet version follows it. -->
+    <TsFsrsVersion>6.0.0</TsFsrsVersion>
+    <!-- Port-only fixes between ts-fsrs releases may use a 4th segment (6.0.0.1) or a prerelease
+         suffix (set VersionSuffix, e.g. 6.0.1-beta.1) by overriding these in a local build. -->
+    <VersionPrefix>$(TsFsrsVersion)</VersionPrefix>
+  </PropertyGroup>
+
+  <!-- Test projects are never packed (the test csproj also sets this explicitly). -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'FsrsSharp.Tests'">
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
 </Project>

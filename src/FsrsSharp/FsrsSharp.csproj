@@ -1,5 +1,32 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <!-- Version comes from Directory.Build.props (VersionPrefix = TsFsrsVersion). -->
+    <IsPackable>true</IsPackable>
+    <PackageId>FsrsSharp</PackageId>
+    <Authors>penCsharpener</Authors>
+    <Description>C# port of ts-fsrs $(TsFsrsVersion): the Free Spaced Repetition Scheduler (FSRS-3, 4, 4.5, 5, 6, 7) with a composable scheduler/middleware kit and the legacy v5 API.</Description>
+    <PackageTags>fsrs;spaced-repetition;anki;flashcards;srs;ts-fsrs</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/penCsharpener/fsrs-sharp</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/penCsharpener/fsrs-sharp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
+    <None Include="../../LICENSE" Pack="true" PackagePath="\" />
+    <None Include="../../LICENSE-ts-fsrs" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
   <ItemGroup>
     <!-- The Alea PRNG is an implementation detail (it only feeds interval fuzzing), but ts-fsrs pins
          its output with golden vectors and this port claims to match them bit for bit — so the test

@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Test
+        run: dotnet test -c Release --no-build
+
+      - name: Pack
+        run: dotnet pack src/FsrsSharp -c Release --no-build -o artifacts
+
+      - name: Verify tag matches packed version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          TAG_VERSION="${TAG#v}"
+          PACKED_VERSION=$(dotnet msbuild src/FsrsSharp/FsrsSharp.csproj -getProperty:Version)
+          echo "Tag version:    $TAG_VERSION"
+          echo "Packed version: $PACKED_VERSION"
+          if [ "$TAG_VERSION" != "$PACKED_VERSION" ]; then
+            echo "::error::Tag $TAG does not match packed version $PACKED_VERSION. Update TsFsrsVersion in Directory.Build.props before tagging."
+            exit 1
+          fi
+
+      - name: Push to NuGet
+        run: dotnet nuget push artifacts/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: artifacts/*.nupkg
+          if-no-files-found: error
