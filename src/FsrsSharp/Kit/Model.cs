@@ -16,8 +16,8 @@ public readonly record struct ModelReview(Rating Rating, double DeltaT);
 
 /// <summary>
 /// Numeric bounds of a model's memory state, keyed with the upstream names (e.g. <c>sMin</c>,
-/// <c>sMax</c>, <c>dMin</c>, <c>dMax</c> for FSRS-6; FSRS-7 spells out <c>stabilityMin</c>,
-/// <c>stabilityFastMin</c>, ... because two fields share the first letter).
+/// <c>sMax</c>, <c>dMin</c>, <c>dMax</c> for FSRS-6; FSRS-7 adds <c>stabilityFastMin</c> and
+/// <c>stabilityFastMax</c>).
 /// </summary>
 public sealed class ModelBounds(IReadOnlyDictionary<string, double> values) : IReadOnlyDictionary<string, double>
 {
