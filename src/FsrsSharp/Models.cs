@@ -1,33 +1,6 @@
 namespace FsrsSharp;
 
 /// <summary>
-/// The learning state of a card. Numeric values match ts-fsrs / py-fsrs so that
-/// data can round-trip between implementations.
-/// </summary>
-public enum State
-{
-    New = 0,
-    Learning = 1,
-    Review = 2,
-    Relearning = 3,
-}
-
-/// <summary>
-/// The rating a learner gives a card during a review.
-/// <see cref="Manual"/> is only used for manually-edited history entries (see
-/// <see cref="Fsrs.Rollback"/> / <see cref="Fsrs.Forget"/>) and can never be
-/// passed to <see cref="Fsrs.Next"/>.
-/// </summary>
-public enum Rating
-{
-    Manual = 0,
-    Again = 1,
-    Hard = 2,
-    Good = 3,
-    Easy = 4,
-}
-
-/// <summary>
 /// A memory state consisting of stability and difficulty, as used by
 /// <see cref="FsrsAlgorithm.NextState"/>.
 /// </summary>
@@ -145,16 +118,4 @@ public class FsrsParameters
         LearningSteps = (string[])LearningSteps.Clone(),
         RelearningSteps = (string[])RelearningSteps.Clone(),
     };
-}
-
-/// <summary>Base type for all errors thrown by FsrsSharp, mirroring ts-fsrs's FSRSError.</summary>
-public class FsrsException : Exception
-{
-    public FsrsException(string message = "FSRS Error") : base(message) { }
-}
-
-/// <summary>Thrown when input (parameters, grade, date, ...) fails validation.</summary>
-public class FsrsValidationException : FsrsException
-{
-    public FsrsValidationException(string message) : base(message) { }
 }
