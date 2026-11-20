@@ -51,7 +51,7 @@ public class Fsrs7SchemaTests
         model.Should().Throw<FsrsValidationException>().WithMessage("*exactly 34 finite weights*");
     }
 
-    [Theory(Skip = "needs scheduler engine")]
+    [Theory]
     [InlineData(0)]
     [InlineData(17)]
     [InlineData(19)]
@@ -60,9 +60,9 @@ public class Fsrs7SchemaTests
     [InlineData(35)]
     public void RejectsWrongWeightCountsAtTheSchedulerBoundary(int length)
     {
-        // Upstream: defineScheduler({ model: FSRS7Model, chrono: dateChrono }).create({ config })
-        // throws 'exactly 34 finite weights'. Needs SchedulerDefinition.Create + DateTimeChrono.
-        _ = length;
+        var config = new FieldBag.Builder { { Fsrs7Model.Weights, Enumerable.Repeat(1.0, length).ToArray() } };
+        var create = () => SchedulerDefinition.Define(Fsrs7Model.Instance, FsrsSharp.Chrono.DateTimeChrono.Instance).Create(config);
+        create.Should().Throw<FsrsValidationException>().WithMessage("*exactly 34 finite weights*");
     }
 
     public static TheoryData<object?> BadWeights =>
