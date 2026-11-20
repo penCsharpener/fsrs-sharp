@@ -5,8 +5,8 @@ public static class SchedulerDefinition
 {
     /// <summary>
     /// Starts a reusable scheduler definition from a model and a chrono. Add policies with
-    /// <see cref="SchedulerDefinition{TState,TTime}.Use"/>, then call
-    /// <see cref="SchedulerDefinition{TState,TTime}.Create"/> once per user/collection config.
+    /// <see cref="SchedulerDefinition{TState,TTime}.Use(ReadOnlySpan{Middleware})"/>, then call
+    /// <see cref="SchedulerDefinition{TState,TTime}.Create(FieldBag)"/> once per user/collection config.
     /// </summary>
     public static SchedulerDefinition<TState, TTime> Define<TState, TTime>(IModel<TState> model, IChrono<TTime> chrono)
         where TState : class
@@ -63,6 +63,7 @@ public sealed partial class Scheduler<TState, TTime>
     public IChronoCore<TTime> Chrono { get; }
 
     /// <summary>Creates a new card due at <paramref name="now"/> (default: <see cref="IChronoCore{TTime}.Now"/>).</summary>
+    /// <param name="now">The creation time; defaults to the current time.</param>
     /// <param name="input">Values for middleware <see cref="Middleware.CardInitInputKeys"/>.</param>
     public partial Card<TState> NewCard(TTime? now = null, FieldBag? input = null);
 

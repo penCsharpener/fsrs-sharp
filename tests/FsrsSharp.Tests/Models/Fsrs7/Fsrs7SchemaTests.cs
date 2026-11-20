@@ -67,7 +67,7 @@ public class Fsrs7SchemaTests
 
     public static TheoryData<object?> BadWeights =>
     [
-        double.NaN, double.PositiveInfinity, double.NegativeInfinity, "1", null,
+        double.NaN, double.PositiveInfinity, double.NegativeInfinity, "1", null!,
     ];
 
     [Theory]

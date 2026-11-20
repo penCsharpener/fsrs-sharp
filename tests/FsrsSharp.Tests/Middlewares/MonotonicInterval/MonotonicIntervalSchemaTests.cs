@@ -2,7 +2,7 @@ using AwesomeAssertions;
 using FsrsSharp.Kit;
 using FsrsSharp.Middlewares;
 using Xunit;
-using static FsrsSharp.Tests.Middlewares.FuzzMonotonicTestSchedulers;
+using static FsrsSharp.Tests.Middlewares.MiddlewareTestSchedulers;
 
 namespace FsrsSharp.Tests.Middlewares.MonotonicInterval;
 
@@ -18,11 +18,11 @@ public class MonotonicIntervalSchemaTests
 
     [Fact]
     public void ParsesMaximumInterval() =>
-        Create(b => b.SetRaw("maximumInterval", 365d)).Config.Get(MonotonicIntervalMiddleware.MaximumInterval).Should().Be(365);
+        Create(b => b.SetRaw("maximumInterval", 365d)).Config.Get(MaximumIntervalMiddleware.MaximumInterval).Should().Be(365);
 
     [Fact]
     public void DefaultsMaximumIntervalWhenOmitted() =>
-        Create().Config.Get(MonotonicIntervalMiddleware.MaximumInterval).Should().Be(36_500);
+        Create().Config.Get(MaximumIntervalMiddleware.MaximumInterval).Should().Be(36_500);
 
     [Fact]
     public void RejectsANullConfig()

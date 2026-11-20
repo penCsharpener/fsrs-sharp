@@ -51,11 +51,28 @@ public class MaximumIntervalMiddlewareTests
         core.Preview(card, Now).Select(item => item.Card.ScheduledDays).Should().Equal(2, 2, 2, 2);
     }
 
-    [Fact(Skip = "needs fuzzing/monotonic middleware")]
+    [Fact]
     public void CapsIntervalsWhenFuzzingIsRegisteredButDisabled()
     {
-        // Upstream: [fixedInterval, createSchedulerFuzzingMiddleware({ rng }), scheduledDays, maximumInterval]
-        // with enableFuzz: false; Easy review is capped at 2 and the rng is never called.
+        var rngCalls = 0;
+        var fuzzing = FuzzingMiddleware.Create(new FuzzingMiddlewareOptions
+        {
+            Rng = _ =>
+            {
+                rngCalls++;
+                return () => 0.5;
+            },
+        });
+        var config = MiddlewareTestSchedulers.Fsrs6Config();
+        config.Add(FuzzingMiddleware.EnableFuzz, false);
+        config.Add(MaximumIntervalMiddleware.MaximumInterval, MaximumInterval);
+        var core = MiddlewareTestSchedulers
+            .Fsrs6(FixedInterval, fuzzing, ScheduledDaysMiddleware.Instance, MaximumIntervalMiddleware.Instance)
+            .Create(config);
+        var card = core.NewCard(Now, MiddlewareTestSchedulers.CardInput("disabled-fuzz"));
+
+        core.Review(card, Rating.Easy, Now).Card.ScheduledDays.Should().Be(MaximumInterval);
+        rngCalls.Should().Be(0);
     }
 
     [Fact]
@@ -65,8 +82,8 @@ public class MaximumIntervalMiddlewareTests
         var scheduler = MiddlewareTestSchedulers.Fsrs6(MaximumIntervalMiddleware.Instance).Create(MiddlewareTestSchedulers.Fsrs6Config());
         scheduler.Config.Get(MaximumIntervalMiddleware.MaximumInterval).Should().Be(36_500);
 
-        MaximumIntervalMiddleware.MaximumInterval.Validate(0).Should().Be("Expected positive integer maximumInterval");
-        MaximumIntervalMiddleware.MaximumInterval.Validate(-1).Should().Be("Expected positive integer maximumInterval");
-        MaximumIntervalMiddleware.MaximumInterval.Validate(1).Should().BeNull();
+        MaximumIntervalMiddleware.MaximumInterval.Validate(0d).Should().Be("Expected positive integer maximumInterval");
+        MaximumIntervalMiddleware.MaximumInterval.Validate(-1d).Should().Be("Expected positive integer maximumInterval");
+        MaximumIntervalMiddleware.MaximumInterval.Validate(1d).Should().BeNull();
     }
 }

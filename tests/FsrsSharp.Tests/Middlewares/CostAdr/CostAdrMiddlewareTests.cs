@@ -7,7 +7,7 @@ using FsrsSharp.Models.Fsrs6;
 using FsrsSharp.Models.Fsrs7;
 using FsrsSharp.Tests.Kit;
 using Xunit;
-using static FsrsSharp.Tests.Middlewares.FuzzMonotonicTestSchedulers;
+using static FsrsSharp.Tests.Middlewares.MiddlewareTestSchedulers;
 
 namespace FsrsSharp.Tests.Middlewares.CostAdr;
 
@@ -146,7 +146,7 @@ public class CostAdrMiddlewareTests
     [InlineData(Rating.Easy)]
     public void QueriesOnlyGradeAndItsPredecessors(Rating grade)
     {
-        var spy = new CostAdrSpyModel<Fsrs7State>(Fsrs7Model.Instance);
+        var spy = new SpyModel<Fsrs7State>(Fsrs7Model.Instance);
         var core = SchedulerDefinition.Define(spy, DateTimeChrono.Instance)
             .Use(CostAdrMiddleware.Instance, MonotonicIntervalMiddleware.Instance)
             .Create(Config7());
@@ -165,7 +165,7 @@ public class CostAdrMiddlewareTests
     [Fact]
     public void OnlyExtendsTheRetentionCacheAsALazyPreviewIsConsumed()
     {
-        var spy = new CostAdrSpyModel<Fsrs7State>(Fsrs7Model.Instance);
+        var spy = new SpyModel<Fsrs7State>(Fsrs7Model.Instance);
         var core = SchedulerDefinition.Define(spy, DateTimeChrono.Instance)
             .Use(CostAdrMiddleware.Instance, MonotonicIntervalMiddleware.Instance)
             .Create(Config7());
@@ -296,7 +296,7 @@ public class CostAdrMiddlewareTests
     public void PassesTheSuppliedFsrs7StateWithoutSteppingTheCurrentGrade()
     {
         // Upstream additionally asserts that the chrono clock is not read; the chrono core cannot be spied here.
-        var spy = new CostAdrSpyModel<Fsrs7State>(Fsrs7Model.Instance);
+        var spy = new SpyModel<Fsrs7State>(Fsrs7Model.Instance);
         var core = SchedulerDefinition.Define(spy, DateTimeChrono.Instance).Use(CostAdrMiddleware.Instance).Create(Config7());
         var card = core.NewCard(Today);
         var expectedRetention = Evaluate(State7);
@@ -320,17 +320,72 @@ public class CostAdrMiddlewareTests
             .Should().Be(core.Model.NextInterval(State7, 0.8));
     }
 
-    [Fact(Skip = "needs the maximum-interval middleware (model interval 0, 1/1440 and 10 days capped at 3)")]
-    public void AppliesOnlyTheUpperCapToModelInterval() { }
+    [Theory]
+    [InlineData(0d, 0d)]
+    [InlineData(1d / 1440, 1d / 1440)]
+    [InlineData(10d, 3d)]
+    public void AppliesOnlyTheUpperCapToModelInterval(double modelInterval, double expected)
+    {
+        var spy = new SpyModel<Fsrs7State>(Fsrs7Model.Instance);
+        var core = SchedulerDefinition.Define(spy, DateTimeChrono.Instance)
+            .Use(CostAdrMiddleware.Instance, MaximumIntervalMiddleware.Instance)
+            .Create(Config7().Set(MaximumIntervalMiddleware.MaximumInterval, 3d));
+        var card = core.NewCard(Today);
+        spy.NextIntervalOverride = (_, _) => modelInterval;
 
-    [Fact(Skip = "needs the maximum-interval middleware")]
-    public void CapsDueTimesWithoutChangingThePostRatingMemoryState() { }
+        core.NextInterval(State7, 0.9, new NextIntervalQuery<Fsrs7State>(card, Rating.Good, 0)).Should().Be(expected);
+    }
 
-    [Fact(Skip = "needs the maximum-interval middleware")]
-    public void UsesMaximumIntervalMiddlewareForAReviewedFsrs7State() { }
+    [Fact]
+    public void CapsDueTimesWithoutChangingThePostRatingMemoryState()
+    {
+        var uncapped = Fsrs7Definition(CostAdrMiddleware.Instance).Create(Config7());
+        var capped = Fsrs7Definition(CostAdrMiddleware.Instance, MaximumIntervalMiddleware.Instance)
+            .Create(Config7().Set(MaximumIntervalMiddleware.MaximumInterval, 3d));
+        var card = uncapped.NewCard(Today);
+        foreach (var grade in Ratings)
+        {
+            var original = uncapped.Review(card, grade, Today);
+            var limited = capped.Review(card, grade, Today);
+            var expectedDue = new DateTime(Math.Min(original.Card.DueAt.Ticks, Today.AddDays(3).Ticks), DateTimeKind.Utc);
+            limited.Card.Should().Be(original.Card.With(DateTimeChrono.DueAt, expectedDue));
+            limited.Revlog.Should().Be(original.Revlog);
+        }
+    }
 
-    [Fact(Skip = "needs the maximum-interval middleware")]
-    public void CapsEveryGradeAfterMonotonicComparisonInTheDocumentedOrder() { }
+    [Fact]
+    public void UsesMaximumIntervalMiddlewareForAReviewedFsrs7State()
+    {
+        var core = Fsrs7Definition(CostAdrMiddleware.Instance, MaximumIntervalMiddleware.Instance)
+            .Create(Config7().Set(MaximumIntervalMiddleware.MaximumInterval, 3d));
+        var card = core.NewCard(Today) with { MemoryState = new Fsrs7State(Stability: 100, StabilityFast: 100, Difficulty: 5) };
+        var nextState = core.Model.Step(new ModelStepInput<Fsrs7State>(card.MemoryState, Rating.Good, 7));
+
+        var interval = core.NextInterval(nextState, 0.9, new NextIntervalQuery<Fsrs7State>(card, Rating.Good, 7));
+
+        interval.Should().BeGreaterThanOrEqualTo(1);
+        interval.Should().BeLessThanOrEqualTo(3);
+    }
+
+    [Fact]
+    public void CapsEveryGradeAfterMonotonicComparisonInTheDocumentedOrder()
+    {
+        var core = Fsrs7Definition(CostAdrMiddleware.Instance, MaximumIntervalMiddleware.Instance, MonotonicIntervalMiddleware.Instance)
+            .Create(Config7().Set(MaximumIntervalMiddleware.MaximumInterval, 3d));
+        var before = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var card = (core.NewCard(before) with
+        {
+            State = State.Review,
+            ScheduleStatus = ScheduleStatus.Review,
+            MemoryState = new Fsrs7State(Stability: 100, StabilityFast: 100, Difficulty: 5),
+        }).With(DateTimeChrono.LastReviewAt, before);
+
+        var intervals = core.Preview(card, Today).Select(r => (r.Card.DueAt - Today).TotalMilliseconds / 86_400_000).ToArray();
+
+        intervals[0].Should().BeGreaterThan(0);
+        intervals[0].Should().BeLessThan(1);
+        intervals[1..].Should().Equal(3, 3, 3);
+    }
 
     [Theory]
     [InlineData(null)]
@@ -350,7 +405,7 @@ public class CostAdrMiddlewareTests
     [Fact]
     public void UsesDownstreamPerRatingRetentionForSiblingComparisons()
     {
-        var spy = new CostAdrSpyModel<Fsrs7State>(Fsrs7Model.Instance);
+        var spy = new SpyModel<Fsrs7State>(Fsrs7Model.Instance);
         var core = SchedulerDefinition.Define(spy, DateTimeChrono.Instance)
             .Use(CostAdrMiddleware.Instance, new RetentionOverrideMiddleware("retention-override-with-siblings"), MonotonicIntervalMiddleware.Instance)
             .Create(Config7());
@@ -386,7 +441,7 @@ public class CostAdrMiddlewareTests
     public void ComparesEachRatingAtItsOwnRetentionWhileSharingThePreviewCache()
     {
         double[] coefficients = [32, 0, -64, 0, 0, -40, 0, 0, 0, 0, -40, 0, 0, 0, 0];
-        var spy = new CostAdrSpyModel<Fsrs7State>(Fsrs7Model.Instance);
+        var spy = new SpyModel<Fsrs7State>(Fsrs7Model.Instance);
         var core = SchedulerDefinition.Define(spy, DateTimeChrono.Instance)
             .Use(CostAdrMiddleware.Instance, MonotonicIntervalMiddleware.Instance)
             .Create(Config7(Policy with { Coefficients = coefficients }).SetRaw36500());
@@ -410,15 +465,80 @@ public class CostAdrMiddlewareTests
         }
     }
 
-    [Fact(Skip = "needs the learning-steps middleware")]
-    public void PreservesFractionalElapsedDaysThroughTwoGoodReviewsAndTheThirdPreview() { }
+    [Fact]
+    public void PreservesFractionalElapsedDaysThroughTwoGoodReviewsAndTheThirdPreview()
+    {
+        var spy = new SpyModel<Fsrs7State>(Fsrs7Model.Instance);
+        var core = SchedulerDefinition.Define(spy, DateTimeChrono.Instance)
+            .Use(LearningStepsMiddleware.Instance, CostAdrMiddleware.Instance, MonotonicIntervalMiddleware.Instance)
+            .Create(Config7()
+                .Set(LearningStepsMiddleware.EnableShortTerm, true)
+                .Set(LearningStepsMiddleware.LearningSteps, ["1m", "10m"])
+                .Set(LearningStepsMiddleware.RelearningSteps, ["10m"])
+                .Set(MaximumIntervalMiddleware.MaximumInterval, 36500d));
+        var first = core.Review(core.NewCard(Today), Rating.Good, Today).Card;
+        (first.DueAt - Today).TotalMilliseconds.Should().Be(600000);
 
-    [Fact(Skip = "needs the learning-steps, scheduled-days and maximum-interval middlewares")]
-    public void KeepsLearningDelaysAndExistingCandidateCachesWithFuzzingAndMonotonicIntervals() { }
+        spy.Clear();
+        var second = core.Review(first, Rating.Good, first.DueAt).Card;
+        spy.Steps.Should().NotBeEmpty();
+        spy.Steps.Should().OnlyContain(input => input.ElapsedDays == 10.0 / 1440);
+        second.State.Should().Be(State.Review);
+        second.MemoryState.StabilityFast.Should().BeGreaterThan(first.MemoryState.StabilityFast);
+
+        spy.Clear();
+        var elapsedDays = (second.DueAt - first.DueAt).TotalMilliseconds / 86_400_000;
+        elapsedDays.Should().BeGreaterThan(0);
+        (elapsedDays % 1).Should().NotBe(0);
+        var preview = core.Preview(second, second.DueAt).ToArray();
+        spy.Steps.Should().HaveCount(4);
+        spy.Steps.Should().OnlyContain(input => input.ElapsedDays == elapsedDays);
+        foreach (var result in preview)
+            core.Review(second, result.Grade, second.DueAt).Card.Should().Be(result.Card);
+    }
+
+    [Fact]
+    public void KeepsLearningDelaysAndExistingCandidateCachesWithFuzzingAndMonotonicIntervals()
+    {
+        var spy = new SpyModel<Fsrs7State>(Fsrs7Model.Instance);
+        var fuzzing = FuzzingMiddleware.Create(new FuzzingMiddlewareOptions { Rng = _ => () => 0.5 });
+        var core = SchedulerDefinition.Define(spy, DateTimeChrono.Instance)
+            .Use(
+                fuzzing,
+                StatsMiddleware.Instance,
+                ScheduledDaysMiddleware.Instance,
+                LearningStepsMiddleware.Instance,
+                CostAdrMiddleware.Instance,
+                MaximumIntervalMiddleware.Instance,
+                MonotonicIntervalMiddleware.Instance)
+            .Create(Config7()
+                .Set(FuzzingMiddleware.EnableFuzz, true)
+                .Set(LearningStepsMiddleware.EnableShortTerm, true)
+                .Set(LearningStepsMiddleware.LearningSteps, ["1m", "10m"])
+                .Set(LearningStepsMiddleware.RelearningSteps, ["10m"])
+                .Set(MaximumIntervalMiddleware.MaximumInterval, 2d));
+        var card = core.NewCard(Today, CardInput("cost-adr"));
+        spy.Clear();
+
+        var preview = core.Preview(card, Today);
+        var first = preview.ToArray();
+        var calls = spy.NextIntervals.Count;
+        first.Take(3).Select(r => (r.Card.DueAt - Today).TotalMilliseconds).Should().Equal(60000, 330000, 600000);
+        ((first[3].Card.DueAt - Today).TotalMilliseconds / 86_400_000).Should().BeLessThanOrEqualTo(2);
+        preview.ToArray().Should().Equal(first);
+        spy.Steps.Should().HaveCount(4);
+        spy.NextIntervals.Should().HaveCount(calls);
+        for (var index = 0; index < Ratings.Length; index++)
+        {
+            var delay = core.NextInterval(first[index].Card.MemoryState, 0.9, new NextIntervalQuery<Fsrs7State>(card, Ratings[index], 0));
+            Math.Truncate(Today.Ticks / (double)TimeSpan.TicksPerMillisecond + delay * 86_400_000)
+                .Should().Be(first[index].Card.DueAt.Ticks / TimeSpan.TicksPerMillisecond);
+        }
+    }
 }
 
 internal static class CostAdrTestConfigExtensions
 {
     public static FieldBag.Builder SetRaw36500(this FieldBag.Builder builder) =>
-        builder.Set(MonotonicIntervalMiddleware.MaximumInterval, 36500d);
+        builder.Set(MaximumIntervalMiddleware.MaximumInterval, 36500d);
 }

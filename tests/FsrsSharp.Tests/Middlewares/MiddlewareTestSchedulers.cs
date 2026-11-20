@@ -2,6 +2,7 @@ using FsrsSharp.Chrono;
 using FsrsSharp.Kit;
 using FsrsSharp.Models;
 using FsrsSharp.Models.Fsrs6;
+using FsrsSharp.Models.Fsrs7;
 
 namespace FsrsSharp.Tests.Middlewares;
 
@@ -27,21 +28,58 @@ internal static class MiddlewareTestSchedulers
     public static SchedulerDefinition<FsrsState, DateTime> Fsrs6(IModel<FsrsState> model, params Middleware[] middlewares) =>
         SchedulerDefinition.Define(model, DateTimeChrono.Instance).Use(middlewares);
 
+    public const double Day = 86_400_000;
+
+    public static FieldBag.Builder Fsrs7Config() =>
+        new FieldBag.Builder().Set(Fsrs7Model.Weights, Fsrs7Constants.DefaultWeights);
+
+    public static SchedulerDefinition<FsrsState, DateTime> Fsrs6Definition(params Middleware[] middlewares) => Fsrs6(middlewares);
+
+    public static SchedulerDefinition<Fsrs7State, DateTime> Fsrs7Definition(params Middleware[] middlewares) =>
+        SchedulerDefinition.Define(Fsrs7Model.Instance, DateTimeChrono.Instance).Use(middlewares);
+
+    public static double DueDays(DateTime dueAt, DateTime reviewTime) => (dueAt - reviewTime).TotalMilliseconds / Day;
+
+    public static FieldBag CardInput(object cardId) =>
+        new FieldBag.Builder().Set(FsrsSharp.Middlewares.FuzzingMiddleware.CardIdInput, cardId).ToFieldBag();
+
+    public static IReadOnlyList<Card<TState>> PreviewCards<TState>(Scheduler<TState, DateTime> scheduler, Card<TState> card, DateTime now)
+        where TState : class =>
+        [.. scheduler.Preview(card, now).Select(item => item.Card)];
+
+    public static double[] PreviewDays<TState>(Scheduler<TState, DateTime> scheduler, Card<TState> card, DateTime now)
+        where TState : class =>
+        [.. scheduler.Preview(card, now).Select(item => DueDays(item.Card.DueAt, now))];
+
     public static double Millis(DateTime later, DateTime earlier) => (later - earlier).TotalMilliseconds;
 }
 
 /// <summary>
-/// Wraps a model so tests can stub or observe <c>NextInterval</c> (upstream: <c>vi.spyOn(core.model, 'nextInterval')</c>).
+/// Wraps a model so tests can stub or observe its core's calls (upstream: <c>vi.spyOn(core.model, ...)</c>).
 /// </summary>
 internal sealed class SpyModel<TState>(IModel<TState> inner) : IModel<TState> where TState : class
 {
     /// <summary>When set, replaces the model's interval (<c>mockReturnValue</c>).</summary>
     public Func<TState, double, double>? NextIntervalOverride { get; set; }
 
-    /// <summary>The desired retentions of every <c>NextInterval</c> call, in order.</summary>
-    public List<double> Retentions { get; } = [];
+    /// <summary>Every <c>Step</c> call, in order.</summary>
+    public List<ModelStepInput<TState>> Steps { get; } = [];
 
-    public int CallCount => Retentions.Count;
+    /// <summary>Every <c>NextInterval</c> call (state and desired retention), in order.</summary>
+    public List<(TState State, double Retention)> NextIntervals { get; } = [];
+
+    /// <summary>The desired retentions of every <c>NextInterval</c> call, in order.</summary>
+    public IReadOnlyList<double> Retentions => [.. NextIntervals.Select(c => c.Retention)];
+
+    public int CallCount => NextIntervals.Count;
+    public int ForgettingCurves { get; private set; }
+
+    public void Clear()
+    {
+        Steps.Clear();
+        NextIntervals.Clear();
+        ForgettingCurves = 0;
+    }
 
     public string Name => inner.Name;
     public IReadOnlyList<FieldKey> ConfigKeys => inner.ConfigKeys;
@@ -56,15 +94,23 @@ internal sealed class SpyModel<TState>(IModel<TState> inner) : IModel<TState> wh
         public object Config => core.Config;
         public ModelBounds Bounds => core.Bounds;
         public object Algorithm => core.Algorithm;
-        public TState Step(ModelStepInput<TState> input) => core.Step(input);
+        public TState Step(ModelStepInput<TState> input)
+        {
+            owner.Steps.Add(input);
+            return core.Step(input);
+        }
 
         public double NextInterval(TState memoryState, double desiredRetention)
         {
-            owner.Retentions.Add(desiredRetention);
+            owner.NextIntervals.Add((memoryState, desiredRetention));
             return owner.NextIntervalOverride is { } o ? o(memoryState, desiredRetention) : core.NextInterval(memoryState, desiredRetention);
         }
 
-        public double ForgettingCurve(TState memoryState, double elapsedDays) => core.ForgettingCurve(memoryState, elapsedDays);
+        public double ForgettingCurve(TState memoryState, double elapsedDays)
+        {
+            owner.ForgettingCurves++;
+            return core.ForgettingCurve(memoryState, elapsedDays);
+        }
         public IReadOnlyList<TState> Forward(IReadOnlyList<ModelReview> history, TState? initialState = null) =>
             core.Forward(history, initialState);
     }

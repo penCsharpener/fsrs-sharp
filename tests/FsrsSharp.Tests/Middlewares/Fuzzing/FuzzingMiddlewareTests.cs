@@ -3,8 +3,9 @@ using FsrsSharp.Chrono;
 using FsrsSharp.Kit;
 using FsrsSharp.Middlewares;
 using FsrsSharp.Models;
+using FsrsSharp.Models.Fsrs6;
 using Xunit;
-using static FsrsSharp.Tests.Middlewares.FuzzMonotonicTestSchedulers;
+using static FsrsSharp.Tests.Middlewares.MiddlewareTestSchedulers;
 using Fuzz = FsrsSharp.Middlewares.Fuzzing;
 
 namespace FsrsSharp.Tests.Middlewares.Fuzzing;
@@ -71,17 +72,93 @@ public class FuzzingMiddlewareTests
 
     // ------------------------------------------------------------------ learning steps / scheduled days
 
-    [Fact(Skip = "needs learning-steps and scheduled-days middlewares (and a model.nextInterval spy)")]
-    public void PreservesAPositiveStepAtLearningStep0() { }
+    private static Scheduler<FsrsState, DateTime> CreateLearningCore(bool fractionalDays, string step)
+    {
+        var spy = new SpyModel<FsrsState>(Fsrs6Model.Instance) { NextIntervalOverride = (_, _) => 0.25 };
+        return Fsrs6(spy, FuzzingMiddleware.Instance, ScheduledDaysMiddleware.Instance, LearningStepsMiddleware.Instance).Create(
+            Fsrs6Config(enableShortTerm: true)
+                .Set(FuzzingMiddleware.EnableFuzz, true)
+                .Set(MaximumIntervalMiddleware.MaximumInterval, 36_500d)
+                .Set(KitSchemas.FractionalDays, fractionalDays)
+                .Set(LearningStepsMiddleware.LearningSteps, [step])
+                .Set(LearningStepsMiddleware.RelearningSteps, []));
+    }
 
-    [Fact(Skip = "needs learning-steps and scheduled-days middlewares (and a model.nextInterval spy)")]
-    public void UsesTheConfiguredRoundingForZeroSteps() { }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PreservesAPositiveStepAtLearningStep0(bool fractionalDays)
+    {
+        foreach (var (step, minutes) in new[] { ("0.01m", 1.0 / 60), ("10m", 10.0), ("1d", 1440.0), ("2.4d", 3456.0) })
+        {
+            var core = CreateLearningCore(fractionalDays, step);
+            core.Chrono.Difference(Now, Now.AddMilliseconds(Day / 2)).Should().Be(fractionalDays ? 0.5 : 0);
+            var card = core.NewCard(Now);
+            card.LearningStep.Should().Be(0);
+            var result = core.Review(card, Rating.Again, Now);
+            (result.Card.DueAt - Now).TotalMilliseconds.Should().Be(minutes * 60000);
+            result.Card.ScheduledDays.Should().Be(fractionalDays ? minutes / 1440 : Math.Floor(minutes / 1440));
+            result.Card.LearningStep.Should().Be(0);
+            result.Card.State.Should().Be(minutes < 1440 ? State.Learning : State.Review);
+            core.Rollback(result.Card, result.Revlog).Should().Be(card);
+        }
+    }
 
-    [Fact(Skip = "needs learning-steps and scheduled-days middlewares (and a model.nextInterval spy)")]
-    public void GraduatesASubDayModelIntervalToOneDay() { }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void UsesTheConfiguredRoundingForZeroSteps(bool fractionalDays)
+    {
+        foreach (var step in new[] { "0m", "0.001m" })
+        {
+            var core = CreateLearningCore(fractionalDays, step);
+            var card = core.NewCard(Now);
+            var result = core.Review(card, Rating.Again, Now);
+            var interval = core.Model.NextInterval(result.Card.MemoryState, 0.9);
+            interval.Should().BeGreaterThan(0);
+            interval.Should().BeLessThan(0.5);
+            (result.Card.DueAt - Now).TotalMilliseconds.Should().Be(fractionalDays ? Math.Truncate(interval * Day) : 0);
+            result.Card.ScheduledDays.Should().Be(fractionalDays ? interval : 0);
+            result.Card.State.Should().Be(State.Learning);
+            result.Card.LearningStep.Should().Be(0);
+        }
+    }
 
-    [Fact(Skip = "needs scheduled-days middleware (and a model.nextInterval spy)")]
-    public void SharesFractionalDaysConfigBetweenFuzzingAndScheduledDays() { }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GraduatesASubDayModelIntervalToOneDay(bool fractionalDays)
+    {
+        var core = CreateLearningCore(fractionalDays, "1m");
+        var first = core.Review(core.NewCard(Now), Rating.Again, Now);
+        var result = core.Review(first.Card, Rating.Good, Now);
+        (result.Card.DueAt - Now).TotalMilliseconds.Should().Be(Day);
+        result.Card.ScheduledDays.Should().Be(1);
+        result.Card.State.Should().Be(State.Review);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SharesFractionalDaysConfigBetweenFuzzingAndScheduledDays(bool? fractionalDays)
+    {
+        var spy = new SpyModel<FsrsState>(Fsrs6Model.Instance) { NextIntervalOverride = (_, _) => 0.25 };
+        var config = Fsrs6Config()
+            .Set(FuzzingMiddleware.EnableFuzz, true)
+            .Set(MaximumIntervalMiddleware.MaximumInterval, 36_500d);
+        if (fractionalDays is { } value) config.Set(KitSchemas.FractionalDays, value);
+        var scheduler = Fsrs6(spy, FuzzingMiddleware.Instance, ScheduledDaysMiddleware.Instance).Create(config);
+        var card = scheduler.NewCard(Now, CardInput("fractional"));
+        var result = scheduler.Review(card, Rating.Again, Now);
+        var interval = scheduler.Model.NextInterval(result.Card.MemoryState, 0.9);
+
+        Fuzz.WithFuzzing(interval, 0, scheduler.Config, "fractional1").Should().Be(fractionalDays == true ? interval : 0);
+        scheduler.Config.Get(KitSchemas.FractionalDays).Should().Be(fractionalDays ?? false);
+        result.Card.ScheduledDays.Should().Be(fractionalDays == true ? interval : 0);
+        (result.Card.DueAt - Now).TotalMilliseconds.Should().Be(fractionalDays == true ? Math.Truncate(interval * Day) : 0);
+        scheduler.Rollback(result.Card, result.Revlog).Should().Be(card);
+    }
 
     // ------------------------------------------------------------------ defaults
 

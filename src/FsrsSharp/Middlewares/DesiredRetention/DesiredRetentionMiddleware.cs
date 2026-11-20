@@ -5,7 +5,7 @@ namespace FsrsSharp.Middlewares;
 /// <summary>
 /// Injects the configured per-grade desired retention into every review candidate
 /// (<c>ts-fsrs.desired-retention</c>). Config <c>desiredRetention</c> is either one number in (0, 1)
-/// or a per-grade <c>IReadOnlyDictionary&lt;Rating, double&gt;</c> with all four grades. A retention
+/// or a per-grade map with all four grades (normalized to a read-only map). A retention
 /// passed explicitly to a standalone interval query wins.
 /// </summary>
 public sealed class DesiredRetentionMiddleware : Middleware
@@ -13,8 +13,14 @@ public sealed class DesiredRetentionMiddleware : Middleware
     public const string Message = "Expected desiredRetention in (0, 1)";
     private static readonly object InjectedKey = new();
 
-    /// <summary>Config key <c>desiredRetention</c> (required): a <see cref="double"/> or an <see cref="IReadOnlyDictionary{TKey,TValue}"/> / <see cref="IDictionary{TKey,TValue}"/> of <see cref="Rating"/> to <see cref="double"/> (also <see cref="DesiredRetentionByGrade"/>).</summary>
-    public static FieldKey<object> DesiredRetention { get; } = new("desiredRetention", v => TryResolve(v, out _) ? null : Message);
+    /// <summary>
+    /// Config key <c>desiredRetention</c> (required). Input: a <see cref="double"/> in (0, 1) or a map of
+    /// <see cref="Rating"/> to <see cref="double"/> (<see cref="IReadOnlyDictionary{TKey,TValue}"/>,
+    /// <see cref="IDictionary{TKey,TValue}"/> or <see cref="DesiredRetentionByGrade"/>) that has all four
+    /// grades. Stored value: a read-only map with all four grades.
+    /// </summary>
+    public static FieldKey<IReadOnlyDictionary<Rating, double>> DesiredRetention { get; } =
+        new("desiredRetention", coerce: Coerce);
 
     public static DesiredRetentionMiddleware Instance { get; } = new();
 
@@ -23,57 +29,57 @@ public sealed class DesiredRetentionMiddleware : Middleware
     public override string Name => "ts-fsrs.desired-retention";
     public override IReadOnlyList<FieldKey> ConfigKeys { get; } = [DesiredRetention];
 
-    /// <summary>Normalizes the <c>desiredRetention</c> config value to one value per grade.</summary>
-    /// <exception cref="FsrsValidationException">The value is invalid.</exception>
-    public static DesiredRetentionByGrade Resolve(FieldBag config) =>
-        TryResolve(config.Get(DesiredRetention), out var result) ? result : throw new FsrsValidationException(Message);
-
-    private static bool TryResolve(object? value, out DesiredRetentionByGrade result)
+    /// <summary>The normalized per-grade retention of <paramref name="config"/> as a mutable copy.</summary>
+    public static DesiredRetentionByGrade Resolve(FieldBag config)
     {
-        result = null!;
-        switch (value)
-        {
-            case DesiredRetentionByGrade byGrade:
-                return FromLookup(g => byGrade[g], out result);
-            case IReadOnlyDictionary<Rating, double> map:
-                return FromLookup(g => map.TryGetValue(g, out var v) ? v : null, out result);
-            case IDictionary<Rating, double> map:
-                return FromLookup(g => map.TryGetValue(g, out var v) ? v : null, out result);
-            case null:
-            case string:
-                return false;
-            default:
-                if (AsDouble(value) is { } single && IsValid(single))
-                {
-                    result = new DesiredRetentionByGrade(single);
-                    return true;
-                }
-                return false;
-        }
+        var map = config.Get(DesiredRetention);
+        var result = new DesiredRetentionByGrade(0.5);
+        foreach (var grade in Grades.All) result[grade] = map[grade];
+        return result;
     }
 
-    private static bool IsValid(double d) => KitSchemas.ValidateDesiredRetention(d) is null;
-
-    private static bool FromLookup(Func<Rating, double?> get, out DesiredRetentionByGrade result)
+    // Mirrors upstream desired-retention/schema.ts: every failure has the same message.
+    private static IReadOnlyDictionary<Rating, double> Coerce(object? value)
     {
-        result = new DesiredRetentionByGrade(0.5);
-        foreach (var grade in Grades.All)
+        double? Single(object? v) => v switch
         {
-            if (get(grade) is not { } v || !IsValid(v)) return false;
-            result[grade] = v;
-        }
-        return true;
-    }
+            double d => d,
+            float f => f,
+            decimal m => (double)m,
+            int i => i,
+            long l => l,
+            short sh => sh,
+            byte b => b,
+            _ => null,
+        };
 
-    private static double? AsDouble(object value) => value switch
-    {
-        double d => d,
-        float f => f,
-        decimal m => (double)m,
-        int i => i,
-        long l => l,
-        _ => null,
-    };
+        Func<Rating, double?>? lookup = value switch
+        {
+            DesiredRetentionByGrade byGrade => g => byGrade[g],
+            IReadOnlyDictionary<Rating, double> map => g => map.TryGetValue(g, out var v) ? v : null,
+            IDictionary<Rating, double> map => g => map.TryGetValue(g, out var v) ? v : null,
+            _ => null,
+        };
+
+        var result = new Dictionary<Rating, double>(4);
+        if (lookup is null)
+        {
+            if (Single(value) is not { } single || KitSchemas.ValidateDesiredRetention(single) is not null)
+                throw new FsrsValidationException(Message);
+            foreach (var grade in Grades.All) result[grade] = single;
+        }
+        else
+        {
+            foreach (var grade in Grades.All)
+            {
+                if (lookup(grade) is not { } v || KitSchemas.ValidateDesiredRetention(v) is not null)
+                    throw new FsrsValidationException(Message);
+                result[grade] = v;
+            }
+        }
+
+        return result.AsReadOnly();
+    }
 
     public override void NextInterval<TState, TTime>(NextIntervalContext<TState, TTime> context, Action next)
     {
@@ -86,4 +92,16 @@ public sealed class DesiredRetentionMiddleware : Middleware
         }
         next();
     }
+}
+
+/// <summary>Collection-initializer support: <c>new FieldBag.Builder { { DesiredRetentionMiddleware.DesiredRetention, 0.9 } }</c>.</summary>
+public static class DesiredRetentionBuilderExtensions
+{
+    /// <summary>Adds a single desired retention for every grade (coerced to a per-grade map by the scheduler).</summary>
+    public static void Add(this FieldBag.Builder builder, FieldKey<IReadOnlyDictionary<Rating, double>> key, double value) =>
+        builder.AddRaw(key, value);
+
+    /// <summary>Adds a per-grade desired retention (all four grades required).</summary>
+    public static void Add(this FieldBag.Builder builder, FieldKey<IReadOnlyDictionary<Rating, double>> key, DesiredRetentionByGrade value) =>
+        builder.AddRaw(key, value);
 }

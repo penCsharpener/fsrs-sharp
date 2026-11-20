@@ -4,7 +4,7 @@ using FsrsSharp.Kit;
 using FsrsSharp.Middlewares;
 using FsrsSharp.Models;
 using Xunit;
-using static FsrsSharp.Tests.Middlewares.FuzzMonotonicTestSchedulers;
+using static FsrsSharp.Tests.Middlewares.MiddlewareTestSchedulers;
 using Monotonic = FsrsSharp.Middlewares.MonotonicInterval;
 
 namespace FsrsSharp.Tests.Middlewares.MonotonicInterval;
@@ -33,7 +33,7 @@ public class MonotonicIntervalMiddlewareTests
             double? scheduledDays = null)
         {
             var scheduler = Fsrs6Definition(MonotonicIntervalMiddleware.Instance)
-                .Create(Fsrs6Config().Set(MonotonicIntervalMiddleware.MaximumInterval, maximum));
+                .Create(Fsrs6Config().Set(MaximumIntervalMiddleware.MaximumInterval, maximum));
             var states = Grades.All.ToDictionary(r => r, r => new FsrsState((int)r, (int)r));
             var intervalByState = states.ToDictionary(p => p.Value, p => intervals[p.Key]);
 
@@ -140,7 +140,7 @@ public class MonotonicIntervalMiddlewareTests
     {
         var core = Fsrs6Definition(MonotonicIntervalMiddleware.Instance).Create(Fsrs6Config());
 
-        core.Config.Get(MonotonicIntervalMiddleware.MaximumInterval).Should().Be(36_500);
+        core.Config.Get(MaximumIntervalMiddleware.MaximumInterval).Should().Be(36_500);
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public class MonotonicIntervalMiddlewareTests
     {
         var baseScheduler = Fsrs6Definition().Create(Fsrs6Config());
         var core = Fsrs6Definition(MonotonicIntervalMiddleware.Instance)
-            .Create(Fsrs6Config().Set(MonotonicIntervalMiddleware.MaximumInterval, MaximumInterval));
+            .Create(Fsrs6Config().Set(MaximumIntervalMiddleware.MaximumInterval, MaximumInterval));
         var baseCard = baseScheduler.NewCard(Now);
         var card = core.NewCard(Now);
         var raw = PreviewDays(baseScheduler, baseCard, Now);
@@ -164,7 +164,7 @@ public class MonotonicIntervalMiddlewareTests
     {
         var baseScheduler = Fsrs6Definition().Create(Fsrs6Config(true, 1));
         var core = Fsrs6Definition(MonotonicIntervalMiddleware.Instance)
-            .Create(Fsrs6Config(true, 1).Set(MonotonicIntervalMiddleware.MaximumInterval, MaximumInterval));
+            .Create(Fsrs6Config(true, 1).Set(MaximumIntervalMiddleware.MaximumInterval, MaximumInterval));
         var baseCard = baseScheduler.Review(baseScheduler.NewCard(Now), Rating.Easy, Now).Card;
         var card = core.Review(core.NewCard(Now), Rating.Easy, Now).Card;
         var raw = PreviewDays(baseScheduler, baseCard, Later);
@@ -216,9 +216,78 @@ public class MonotonicIntervalMiddlewareTests
         combinedCalls.Should().BeGreaterThan(0);
     }
 
-    [Fact(Skip = "needs the learning-steps middleware")]
-    public void LetsLearningStepsOwnShortTermAndGraduationIntervals() { }
+    [Fact]
+    public void LetsLearningStepsOwnShortTermAndGraduationIntervals()
+    {
+        var core = Fsrs6Definition(
+            FuzzingMiddleware.Create(new FuzzingMiddlewareOptions { Rng = _ => () => 0.5 }),
+            LearningStepsMiddleware.Instance,
+            MonotonicIntervalMiddleware.Instance).Create(
+            Fsrs6Config(enableShortTerm: true, numRelearningSteps: 1)
+                .Set(FuzzingMiddleware.EnableFuzz, true)
+                .Set(MaximumIntervalMiddleware.MaximumInterval, MaximumInterval)
+                .Set(LearningStepsMiddleware.LearningSteps, ["1m", "10m"])
+                .Set(LearningStepsMiddleware.RelearningSteps, ["10m"]));
+        var card = core.NewCard(Now, CardInput("learning-step"));
+        var preview = core.Preview(card, Now).ToDictionary(item => item.Grade);
 
-    [Fact(Skip = "needs the learning-steps middleware (positive-minute, mixed-minute, zero-minute, sub-minute, empty, exhausted and maximum-interval cases)")]
-    public void KeepsLearningIntervalsMonotonic() { }
+        (preview[Rating.Again].Card.DueAt - Now).TotalMilliseconds.Should().Be(60_000);
+        (preview[Rating.Hard].Card.DueAt - Now).TotalMilliseconds.Should().Be(5.5 * 60_000);
+        (preview[Rating.Good].Card.DueAt - Now).TotalMilliseconds.Should().Be(10 * 60_000);
+        preview[Rating.Easy].Card.State.Should().Be(State.Review);
+
+        var learningCard = preview[Rating.Good].Card;
+        var learningGraduation = core.Review(learningCard, Rating.Good, learningCard.DueAt);
+        learningGraduation.Card.State.Should().Be(State.Review);
+        DueDays(learningGraduation.Card.DueAt, learningCard.DueAt).Should().Be(2);
+
+        var reviewCard = preview[Rating.Easy].Card;
+        var relearningCard = core.Review(reviewCard, Rating.Again, reviewCard.DueAt).Card;
+        relearningCard.State.Should().Be(State.Relearning);
+
+        var relearningGraduation = core.Review(relearningCard, Rating.Good, relearningCard.DueAt);
+        relearningGraduation.Card.State.Should().Be(State.Review);
+        DueDays(relearningGraduation.Card.DueAt, relearningCard.DueAt).Should().Be(1);
+    }
+
+    public static TheoryData<string, string[], int, double, double[]> LearningIntervalCases() => new()
+    {
+        // Again 1m, Hard 5m, Good 1d, Easy 2d
+        { "positive-minute", ["1m", "9m"], 1, 100, [1, 5, 1440, 2880] },
+        // Again 1d, Hard 5m, Good 10m, Easy 2d
+        { "mixed-minute", ["0m", "10m"], 0, 100, [1440, 5, 10, 2880] },
+        // Again 1d, Hard 2d, Good 3d, Easy 4d
+        { "zero-minute", ["0m"], 0, 100, [1440, 2880, 4320, 5760] },
+        // Again 0.4m, Hard 0.4m, Good 0.4m, Easy 1d
+        { "sub-minute", ["0.4m", "0.4m"], 0, 100, [0.4, 0.4, 0.4, 1440] },
+        // Again 1d, Hard 2d, Good 3d, Easy 4d
+        { "empty", [], 0, 100, [1440, 2880, 4320, 5760] },
+        // Again 1d, Hard 2d, Good 3d, Easy 4d
+        { "exhausted", ["1m"], 1, 100, [1440, 2880, 4320, 5760] },
+        // Again 1m, Hard 5m, Good 1d, Easy capped at 1d
+        { "maximum interval", ["1m", "9m"], 1, 1, [1, 5, 1440, 1440] },
+    };
+
+    [Theory]
+    [MemberData(nameof(LearningIntervalCases))]
+    public void KeepsLearningIntervalsMonotonic(string name, string[] learningSteps, int learningStep, double maximum, double[] expected)
+    {
+        _ = name;
+        var learningCore = Fsrs6Definition(LearningStepsMiddleware.Instance).Create(
+            Fsrs6Config(enableShortTerm: true, numRelearningSteps: 1)
+                .Set(LearningStepsMiddleware.LearningSteps, ["1m", "10m"])
+                .Set(LearningStepsMiddleware.RelearningSteps, ["10m"]));
+        var monotonicCore = Fsrs6Definition(LearningStepsMiddleware.Instance, MonotonicIntervalMiddleware.Instance).Create(
+            Fsrs6Config(enableShortTerm: true, numRelearningSteps: learningSteps.Length)
+                .Set(MaximumIntervalMiddleware.MaximumInterval, maximum)
+                .Set(LearningStepsMiddleware.LearningSteps, learningSteps)
+                .Set(LearningStepsMiddleware.RelearningSteps, learningSteps));
+        var learningCard = learningCore.Review(learningCore.NewCard(Now), Rating.Again, Now).Card;
+        var reviewTime = learningCard.DueAt;
+        var input = learningCard with { Fields = learningCard.Fields.With(LearningStepsMiddleware.LearningStepField, learningStep) };
+
+        monotonicCore.Preview(input, reviewTime)
+            .Select(item => (item.Card.DueAt - reviewTime).TotalMilliseconds / 60_000)
+            .Should().Equal(expected);
+    }
 }

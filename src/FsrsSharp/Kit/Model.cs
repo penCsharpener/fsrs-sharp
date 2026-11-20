@@ -62,6 +62,9 @@ public interface IModelCore<TState> where TState : class
 }
 
 /// <summary>Options for <see cref="IModel{TState}.Create"/> (srs-kit <c>ModelCreate</c> ctx flags).</summary>
+/// <param name="Migrate">Migrate legacy parameter sets.</param>
+/// <param name="Clip">Clip parameters into their bounds.</param>
+/// <param name="Check">Check parameters for validity.</param>
 /// <param name="Bypass">
 /// The config was already parsed by the scheduler: skip validation, migration, clipping and checks.
 /// </param>

@@ -2,7 +2,7 @@ using AwesomeAssertions;
 using FsrsSharp.Kit;
 using FsrsSharp.Middlewares;
 using Xunit;
-using static FsrsSharp.Tests.Middlewares.FuzzMonotonicTestSchedulers;
+using static FsrsSharp.Tests.Middlewares.MiddlewareTestSchedulers;
 
 namespace FsrsSharp.Tests.Middlewares.Fuzzing;
 

@@ -14,11 +14,12 @@ public class DesiredRetentionMiddlewareTests
     private static readonly Rating[] Grades = [Rating.Again, Rating.Hard, Rating.Good, Rating.Easy];
     private static readonly DateTime Now = new(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
 
-    private static FieldBag.Builder Fsrs7Config(object desiredRetention) => new()
+    private static FieldBag.Builder Fsrs7Config(object desiredRetention)
     {
-        { Fsrs7Model.Weights, Fsrs7Constants.DefaultWeights },
-        { DesiredRetentionMiddleware.DesiredRetention, desiredRetention },
-    };
+        var builder = new FieldBag.Builder { { Fsrs7Model.Weights, Fsrs7Constants.DefaultWeights } };
+        builder.AddRaw(DesiredRetentionMiddleware.DesiredRetention, desiredRetention);
+        return builder;
+    }
 
     private static SchedulerDefinition<Fsrs7State, DateTime> Fsrs7(IModel<Fsrs7State> model, params Middleware[] middlewares) =>
         SchedulerDefinition.Define(model, DateTimeChrono.Instance).Use(middlewares);

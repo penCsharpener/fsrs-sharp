@@ -25,8 +25,12 @@ public sealed class FuzzingMiddleware : Middleware
 
     public static FieldKey<bool> EnableFuzz { get; } = new("enableFuzz");
 
-    public static FieldKey<double> MaximumInterval { get; } =
-        new("maximumInterval", MonotonicIntervalMiddleware.ValidateMaximumInterval);
+    /// <summary>Alias of <see cref="MaximumIntervalMiddleware.MaximumInterval"/> (one shared key).</summary>
+    public static FieldKey<double> MaximumInterval => MaximumIntervalMiddleware.MaximumInterval;
+
+    // Upstream's fuzzing schema requires maximumInterval (no default), unlike maximum-interval/monotonic;
+    // the shared key's required twin enforces that.
+    private static FieldKey<double> RequiredMaximumInterval => MaximumIntervalMiddleware.RequiredMaximumInterval;
 
     /// <summary>The <c>cardId</c> card field.</summary>
     public static FieldKey<object> CardIdField { get; } = new("cardId", v => CardId.IsValid(v) ? null : "Expected card cardId");
@@ -53,7 +57,7 @@ public sealed class FuzzingMiddleware : Middleware
     public static FuzzingMiddleware Create(FuzzingMiddlewareOptions? options = null) => new(options ?? new FuzzingMiddlewareOptions());
 
     public override string Name => "ts-fsrs.fuzzing";
-    public override IReadOnlyList<FieldKey> ConfigKeys { get; } = [EnableFuzz, MaximumInterval, KitSchemas.FractionalDays];
+    public override IReadOnlyList<FieldKey> ConfigKeys { get; } = [EnableFuzz, RequiredMaximumInterval, KitSchemas.FractionalDays];
     public override IReadOnlyList<FieldKey> CardInitInputKeys { get; } = [CardIdInput];
     public override IReadOnlyList<FieldKey> CardFields { get; } = [CardIdField, StatsMiddleware.Reps];
     public override IReadOnlyList<FieldKey> RevlogFields { get; } = [CardIdRevlog];

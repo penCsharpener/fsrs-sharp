@@ -78,9 +78,7 @@ public sealed partial class Scheduler<TState, TTime>
         {
             if (source.TryGetValue(key.Name, out var raw))
             {
-                var error = key.Validate(raw);
-                if (error is not null) throw new FsrsValidationException(error);
-                target.SetRaw(key.Name, raw);
+                target.SetRaw(key.Name, key.Parse(raw));
             }
             else if (key.HasDefault)
             {
@@ -160,9 +158,7 @@ public sealed partial class Scheduler<TState, TTime>
         {
             if (input.TryGetValue(key.Name, out var raw))
             {
-                var error = key.Validate(raw);
-                if (error is not null) throw new FsrsValidationException(error);
-                result.SetRaw(key.Name, raw);
+                result.SetRaw(key.Name, key.Parse(raw));
             }
             else if (key.HasDefault)
             {

@@ -41,7 +41,7 @@ public sealed class ReviewCandidate<TState> where TState : class
     /// <summary>Post-rating memory state for a grade (memoised; the same instance is returned per grade).</summary>
     public Func<Rating, TState> Step { get; }
 
-    /// <summary>The grade most recently stepped into <paramref name="memoryState"/> (by reference), if any.</summary>
+    /// <summary>The grade most recently stepped into the given memory state (by reference), if any.</summary>
     public Func<TState, Rating?> FindGrade { get; }
 
     /// <summary>Interval in days for a post-rating state and retention. Replace to layer a policy.</summary>
@@ -133,6 +133,7 @@ public sealed class RollbackContext<TState, TTime>(Scheduler<TState, TTime> inst
 public enum CardDefaultOperation { NewCard, Forget }
 
 /// <summary>Context for <see cref="Middleware.WriteCardDefaults{TState}"/> (srs-kit <c>MiddlewareDefaultValueContext</c>).</summary>
+/// <param name="Operation">Whether a new card is created or an existing one is forgotten.</param>
 /// <param name="Config">The parsed scheduler config.</param>
 /// <param name="InitInput">For <see cref="CardDefaultOperation.NewCard"/>: the card init input fields.</param>
 /// <param name="ExistingCard">For <see cref="CardDefaultOperation.Forget"/>: the card being reset.</param>

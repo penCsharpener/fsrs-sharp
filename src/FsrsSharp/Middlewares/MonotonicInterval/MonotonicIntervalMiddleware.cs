@@ -8,29 +8,17 @@ namespace FsrsSharp.Middlewares;
 /// </summary>
 public sealed class MonotonicIntervalMiddleware : Middleware
 {
-    public const double DefaultMaximumInterval = 36_500;
-
-    internal const string MaximumIntervalMessage = "Expected positive integer maximumInterval";
-
-    internal static string? ValidateMaximumInterval(double value) =>
-        double.IsFinite(value) && value == Math.Floor(value) && value > 0 && value <= 9007199254740991.0
-            ? null
-            : MaximumIntervalMessage;
-
-    // Keys must be declared before Instance (the instance initializers capture them).
-    internal static FieldKey<double> MaximumInterval { get; } = new("maximumInterval", DefaultMaximumInterval, ValidateMaximumInterval);
-
     public static MonotonicIntervalMiddleware Instance { get; } = new();
 
     private MonotonicIntervalMiddleware() { }
 
     public override string Name => "ts-fsrs.monotonic-interval";
-    public override IReadOnlyList<FieldKey> ConfigKeys { get; } = [MaximumInterval];
+    public override IReadOnlyList<FieldKey> ConfigKeys { get; } = [MaximumIntervalMiddleware.MaximumInterval];
 
     public override void NextInterval<TState, TTime>(NextIntervalContext<TState, TTime> context, Action next)
     {
         var candidate = context.Candidate;
-        var maximumInterval = context.Config.Get(MaximumInterval);
+        var maximumInterval = context.Config.Get(MaximumIntervalMiddleware.MaximumInterval);
 
         double Interval(Rating rating) =>
             candidate.NextInterval(candidate.Step(rating), KitSchemas.ParseDesiredRetention(candidate.DesiredRetention[rating]));
