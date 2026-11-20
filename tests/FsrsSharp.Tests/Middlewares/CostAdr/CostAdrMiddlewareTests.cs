@@ -146,7 +146,7 @@ public class CostAdrMiddlewareTests
     [InlineData(Rating.Easy)]
     public void QueriesOnlyGradeAndItsPredecessors(Rating grade)
     {
-        var spy = new SpyModel<Fsrs7State>(Fsrs7Model.Instance);
+        var spy = new CostAdrSpyModel<Fsrs7State>(Fsrs7Model.Instance);
         var core = SchedulerDefinition.Define(spy, DateTimeChrono.Instance)
             .Use(CostAdrMiddleware.Instance, MonotonicIntervalMiddleware.Instance)
             .Create(Config7());
@@ -165,7 +165,7 @@ public class CostAdrMiddlewareTests
     [Fact]
     public void OnlyExtendsTheRetentionCacheAsALazyPreviewIsConsumed()
     {
-        var spy = new SpyModel<Fsrs7State>(Fsrs7Model.Instance);
+        var spy = new CostAdrSpyModel<Fsrs7State>(Fsrs7Model.Instance);
         var core = SchedulerDefinition.Define(spy, DateTimeChrono.Instance)
             .Use(CostAdrMiddleware.Instance, MonotonicIntervalMiddleware.Instance)
             .Create(Config7());
@@ -296,7 +296,7 @@ public class CostAdrMiddlewareTests
     public void PassesTheSuppliedFsrs7StateWithoutSteppingTheCurrentGrade()
     {
         // Upstream additionally asserts that the chrono clock is not read; the chrono core cannot be spied here.
-        var spy = new SpyModel<Fsrs7State>(Fsrs7Model.Instance);
+        var spy = new CostAdrSpyModel<Fsrs7State>(Fsrs7Model.Instance);
         var core = SchedulerDefinition.Define(spy, DateTimeChrono.Instance).Use(CostAdrMiddleware.Instance).Create(Config7());
         var card = core.NewCard(Today);
         var expectedRetention = Evaluate(State7);
@@ -350,7 +350,7 @@ public class CostAdrMiddlewareTests
     [Fact]
     public void UsesDownstreamPerRatingRetentionForSiblingComparisons()
     {
-        var spy = new SpyModel<Fsrs7State>(Fsrs7Model.Instance);
+        var spy = new CostAdrSpyModel<Fsrs7State>(Fsrs7Model.Instance);
         var core = SchedulerDefinition.Define(spy, DateTimeChrono.Instance)
             .Use(CostAdrMiddleware.Instance, new RetentionOverrideMiddleware("retention-override-with-siblings"), MonotonicIntervalMiddleware.Instance)
             .Create(Config7());
@@ -386,7 +386,7 @@ public class CostAdrMiddlewareTests
     public void ComparesEachRatingAtItsOwnRetentionWhileSharingThePreviewCache()
     {
         double[] coefficients = [32, 0, -64, 0, 0, -40, 0, 0, 0, 0, -40, 0, 0, 0, 0];
-        var spy = new SpyModel<Fsrs7State>(Fsrs7Model.Instance);
+        var spy = new CostAdrSpyModel<Fsrs7State>(Fsrs7Model.Instance);
         var core = SchedulerDefinition.Define(spy, DateTimeChrono.Instance)
             .Use(CostAdrMiddleware.Instance, MonotonicIntervalMiddleware.Instance)
             .Create(Config7(Policy with { Coefficients = coefficients }).SetRaw36500());

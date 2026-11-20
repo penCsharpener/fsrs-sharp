@@ -44,7 +44,7 @@ public static class FuzzMonotonicTestSchedulers
 }
 
 /// <summary>An <see cref="IModel{TState}"/> decorator recording the calls made to the created model core (the C# counterpart of <c>vi.spyOn(core.model, ...)</c>).</summary>
-public sealed class SpyModel<TState>(IModel<TState> inner) : IModel<TState> where TState : class
+public sealed class CostAdrSpyModel<TState>(IModel<TState> inner) : IModel<TState> where TState : class
 {
     public List<ModelStepInput<TState>> Steps { get; } = [];
     public List<(TState State, double Retention)> NextIntervals { get; } = [];
@@ -64,7 +64,7 @@ public sealed class SpyModel<TState>(IModel<TState> inner) : IModel<TState> wher
         ForgettingCurves = 0;
     }
 
-    private sealed class Core(SpyModel<TState> spy, IModelCore<TState> core) : IModelCore<TState>
+    private sealed class Core(CostAdrSpyModel<TState> spy, IModelCore<TState> core) : IModelCore<TState>
     {
         public object Config => core.Config;
         public ModelBounds Bounds => core.Bounds;
