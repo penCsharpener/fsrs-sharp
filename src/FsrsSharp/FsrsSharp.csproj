@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- The Alea PRNG is an implementation detail (it only feeds interval fuzzing), but ts-fsrs pins
+         its output with golden vectors and this port claims to match them bit for bit — so the test
+         project has to be able to see it. -->
+    <InternalsVisibleTo Include="FsrsSharp.Tests" />
+  </ItemGroup>
+
+</Project>
