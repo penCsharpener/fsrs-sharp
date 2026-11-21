@@ -213,7 +213,7 @@ public class DesiredRetentionMiddlewareTests
         fsrs6.Should().Throw<FsrsValidationException>().WithMessage("Expected desiredRetention in (0, 1)");
     }
 
-    [Theory(Skip = "needs DefaultScheduler")]
+    [Theory]
     [InlineData("FSRS-3")]
     [InlineData("FSRS-4")]
     [InlineData("FSRS-4.5")]
@@ -222,8 +222,17 @@ public class DesiredRetentionMiddlewareTests
     [InlineData("FSRS-7")]
     public void RejectsRetentionOneWhenCreatingDefaultScheduler(string version)
     {
-        // Upstream: DefaultScheduler({ version, desiredRetention: 1 }) rejects with 'Expected desiredRetention in (0, 1)'.
-        _ = version;
+        var fsrsVersion = version switch
+        {
+            "FSRS-3" => FsrsVersion.Fsrs3,
+            "FSRS-4" => FsrsVersion.Fsrs4,
+            "FSRS-4.5" => FsrsVersion.Fsrs4Dot5,
+            "FSRS-5" => FsrsVersion.Fsrs5,
+            "FSRS-6" => FsrsVersion.Fsrs6,
+            _ => FsrsVersion.Fsrs7,
+        };
+        var act = () => DefaultScheduler.Create(fsrsVersion, new DefaultSchedulerOptions { DesiredRetention = 1 });
+        act.Should().Throw<FsrsValidationException>().WithMessage("Expected desiredRetention in (0, 1)");
     }
 }
 

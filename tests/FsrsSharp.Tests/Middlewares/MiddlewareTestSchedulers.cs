@@ -65,6 +65,9 @@ internal sealed class SpyModel<TState>(IModel<TState> inner) : IModel<TState> wh
     /// <summary>Every <c>Step</c> call, in order.</summary>
     public List<ModelStepInput<TState>> Steps { get; } = [];
 
+    /// <summary>Every <c>Forward</c> call: the history, the initial state and the returned states.</summary>
+    public List<(IReadOnlyList<ModelReview> History, TState? InitialState, IReadOnlyList<TState> Result)> Forwards { get; } = [];
+
     /// <summary>Every <c>NextInterval</c> call (state and desired retention), in order.</summary>
     public List<(TState State, double Retention)> NextIntervals { get; } = [];
 
@@ -77,6 +80,7 @@ internal sealed class SpyModel<TState>(IModel<TState> inner) : IModel<TState> wh
     public void Clear()
     {
         Steps.Clear();
+        Forwards.Clear();
         NextIntervals.Clear();
         ForgettingCurves = 0;
     }
@@ -111,8 +115,12 @@ internal sealed class SpyModel<TState>(IModel<TState> inner) : IModel<TState> wh
             owner.ForgettingCurves++;
             return core.ForgettingCurve(memoryState, elapsedDays);
         }
-        public IReadOnlyList<TState> Forward(IReadOnlyList<ModelReview> history, TState? initialState = null) =>
-            core.Forward(history, initialState);
+        public IReadOnlyList<TState> Forward(IReadOnlyList<ModelReview> history, TState? initialState = null)
+        {
+            var result = core.Forward(history, initialState);
+            owner.Forwards.Add((history, initialState, result));
+            return result;
+        }
     }
 }
 
