@@ -4,7 +4,7 @@ A C# 15 / .NET 11 port of [ts-fsrs](https://github.com/open-spaced-repetition/ts
 the Free Spaced Repetition Scheduler. It supports FSRS-3, 4, 4.5, 5, 6 and 7, a composable
 scheduler built from models, chronos and middlewares, and the v5-style legacy API.
 
-The NuGet version tracks the ts-fsrs release it ports, so `FsrsSharp 6.0.0` is ts-fsrs `6.0.0`.
+The NuGet version tracks the ts-fsrs release it ports, so `PenCsharpener.FsrsSharp 6.0.0` is ts-fsrs `6.0.0`.
 
 **Upstream base:** ts-fsrs tag [`v6.0.0`](https://github.com/open-spaced-repetition/ts-fsrs/tree/v6.0.0),
 commit [`b69d6ca2dca55579198c913fd55a43d6bf703b34`](https://github.com/open-spaced-repetition/ts-fsrs/commit/b69d6ca2dca55579198c913fd55a43d6bf703b34)
@@ -19,7 +19,7 @@ FsrsSharp is MIT-licensed and a derivative of ts-fsrs. See [LICENSE](LICENSE) an
 ## Install
 
 ```
-dotnet add package FsrsSharp
+dotnet add package PenCsharpener.FsrsSharp
 ```
 
 ## Quickstart
