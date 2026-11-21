@@ -16,9 +16,6 @@ public class Fsrs5Tests
 {
     private static readonly DateTime Epoch = TestParameters.Epoch;
 
-    // TODO(config-key cleanup): upstream also composes MaximumIntervalMiddleware here, but its int-typed
-    // maximumInterval key currently collides with the double-typed one Fuzzing/MonotonicInterval declare. The cap
-    // (36500) never binds in these scenarios, so leaving it out changes no asserted value.
     private static Scheduler<FsrsState, DateTime> CreateScheduler(bool enableShortTerm = true) =>
         SchedulerDefinition.Define(Fsrs5Model.Instance, DateTimeChrono.Instance)
             .Use(
@@ -27,6 +24,7 @@ public class Fsrs5Tests
                 StatsMiddleware.Instance,
                 ScheduledDaysMiddleware.Instance,
                 LearningStepsMiddleware.Instance,
+                MaximumIntervalMiddleware.Instance,
                 MonotonicIntervalMiddleware.Instance)
             .Create(new FieldBag.Builder
             {
@@ -34,7 +32,7 @@ public class Fsrs5Tests
                 { Fsrs5Model.EnableShortTerm, enableShortTerm },
                 { DesiredRetentionMiddleware.DesiredRetention, 0.9 },
                 { FuzzingMiddleware.EnableFuzz, false },
-                { FuzzingMiddleware.MaximumInterval, 36500.0 },
+                { MaximumIntervalMiddleware.MaximumInterval, 36500.0 },
                 { LearningStepsMiddleware.LearningSteps, ["1m", "10m"] },
                 { LearningStepsMiddleware.RelearningSteps, ["10m"] },
             });

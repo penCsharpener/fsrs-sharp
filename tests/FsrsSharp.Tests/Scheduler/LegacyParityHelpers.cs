@@ -33,16 +33,13 @@ internal sealed record LegacyNext(LegacyCardView Card, LegacyLogView Log);
 
 /// <summary>
 /// Port of ts-fsrs <c>scheduler/default-scheduler.legacy-test-utils.ts</c>. The only code that touches the legacy
-/// v5 API is <see cref="Next"/>; it is compiled out until <c>FsrsSharp.Legacy</c> is in place. To enable the parity
-/// tests, define <c>FSRS_LEGACY_V6</c> and remove the <c>Skip</c> arguments in
-/// <see cref="DefaultSchedulerLegacyParityTests"/>.
+/// v5 API is <see cref="Next"/>.
 /// </summary>
 internal static class LegacyParityHelpers
 {
     /// <summary>Upstream <c>legacyNext</c>: <c>new FSRS(toLegacyParameters(options)).next(toLegacyCard(card), now, grade)</c>.</summary>
     public static LegacyNext Next(DefaultSchedulerOptions options, Card<FsrsState> card, DateTime now, Rating grade)
     {
-#if FSRS_LEGACY_V6
         var defaults = FsrsSharp.Legacy.Defaults.GeneratorParameters();
         var fsrs = new FsrsSharp.Legacy.Fsrs(new FsrsSharp.Legacy.FsrsParametersInput
         {
@@ -74,10 +71,6 @@ internal static class LegacyParityHelpers
             new LegacyLogView(
                 item.Log.Stability, item.Log.Difficulty, item.Log.ScheduledDays, item.Log.LearningSteps,
                 item.Log.Rating, item.Log.State, item.Log.Review));
-#else
-        _ = (options, card, now, grade);
-        throw new NotSupportedException("Needs FsrsSharp.Legacy v6 (define FSRS_LEGACY_V6).");
-#endif
     }
 
     private static Card<FsrsState> FromLegacyCard(LegacyCardView card, object cardId) =>

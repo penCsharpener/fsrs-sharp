@@ -15,13 +15,10 @@ namespace FsrsSharp.Tests.Scheduler;
 
 /// <summary>
 /// Port of ts-fsrs <c>scheduler/default-scheduler.legacy-parity.spec.ts</c> plus the legacy-comparing tests of
-/// <c>default-scheduler.spec.ts</c>. Every test needs <c>FsrsSharp.Legacy</c> (v6 layout) and is skipped until
-/// <see cref="LegacyParityHelpers.Next"/> is enabled (define <c>FSRS_LEGACY_V6</c>, drop the Skip arguments).
+/// <c>default-scheduler.spec.ts</c>. Every test compares against <c>FsrsSharp.Legacy.Fsrs</c>.
 /// </summary>
 public class DefaultSchedulerLegacyParityTests
 {
-    private const string Needs = "needs FsrsSharp.Legacy v6";
-
     private static readonly string[] CardKeys = ["cardId", "dueAt", "lapses", "lastReviewAt", "learningStep", "reps", "scheduledDays"];
     private static readonly string[] RevlogKeys = ["cardId", "dueAt", "lastReviewAt", "learningStep", "reviewTime", "scheduledDays"];
 
@@ -51,7 +48,7 @@ public class DefaultSchedulerLegacyParityTests
 
     private static Scheduler<FsrsState, DateTime> Fsrs6(DefaultSchedulerOptions options) => DefaultScheduler.Create(FsrsVersion.Fsrs6, options);
 
-    [Theory(Skip = Needs)]
+    [Theory]
     [MemberData(nameof(ShortTermAndGrades))]
     public void MatchesEveryCardAndRevlogFieldForRating(bool enableShortTerm, Rating grade)
     {
@@ -87,7 +84,7 @@ public class DefaultSchedulerLegacyParityTests
         actual.Revlog.ReviewTime.Should().Be(legacy.Log.Review);
     }
 
-    [Theory(Skip = Needs)]
+    [Theory]
     [MemberData(nameof(ShortTermAndStates))]
     public void MatchesEveryRatingFromState(bool enableShortTerm, State state)
     {
@@ -119,7 +116,7 @@ public class DefaultSchedulerLegacyParityTests
         }
     }
 
-    [Theory(Skip = Needs)]
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void MatchesAMultiRoundReviewSequence(bool enableShortTerm)
@@ -140,7 +137,7 @@ public class DefaultSchedulerLegacyParityTests
         }
     }
 
-    [Theory(Skip = Needs)]
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void Matches200FixedSeedRandomizedReviewRounds(bool enableShortTerm)
@@ -173,7 +170,7 @@ public class DefaultSchedulerLegacyParityTests
         }
     }
 
-    [Theory(Skip = Needs)]
+    [Theory]
     [MemberData(nameof(ShortTermAndStates))]
     public void RestoresTheInputCardForState(bool enableShortTerm, State state)
     {
@@ -208,7 +205,7 @@ public class DefaultSchedulerLegacyParityTests
         ["long-term with high requested retention"] = new() { EnableShortTerm = false, DesiredRetention = 0.99 },
     };
 
-    [Theory(Skip = Needs)]
+    [Theory]
     [MemberData(nameof(EdgeCases))]
     public void ParameterEdgeParityMatchesEveryRatingFromState(string name, State state)
     {
@@ -248,7 +245,7 @@ public class DefaultSchedulerLegacyParityTests
         }
     }
 
-    [Theory(Skip = Needs)]
+    [Theory]
     [InlineData(2.5)]
     [InlineData(0.0)]
     public void ConsumesLegacyScheduledDaysWithoutLosingRollbackParity(double scheduledDays)
@@ -265,12 +262,18 @@ public class DefaultSchedulerLegacyParityTests
         var expected = Review(options, card, Now, Rating.Good);
         var actual = scheduler.Review(card, Rating.Good, Now);
 
-        ExpectFullParity(actual, expected);
+        // The legacy C# card stores scheduled_days as int (upstream: number), so the logged value is truncated there.
+        var expectedRevlog = expected.Revlog with
+        {
+            Fields = expected.Revlog.Fields.With(ScheduledDaysMiddleware.ScheduledDays, scheduledDays),
+        };
+        actual.Card.Should().Be(expected.Card);
+        ExpectRevlogParity(actual.Revlog, expectedRevlog);
         ExpectRollbackParity(scheduler.Rollback(actual.Card, actual.Revlog), card);
         scheduler.Rollback(actual.Card, actual.Revlog).ScheduledDays.Should().Be(scheduledDays);
     }
 
-    [Fact(Skip = Needs)]
+    [Fact]
     public void KeepsScheduledDaysAlignedWithTheSecondPrecisionLearningStepDue()
     {
         var options = new DefaultSchedulerOptions { EnableShortTerm = true, LearningSteps = ["23.999h"], RelearningSteps = ["47.999h"] };
@@ -303,7 +306,7 @@ public class DefaultSchedulerLegacyParityTests
         { FsrsVersion.Fsrs6, [.. Fsrs6Constants.DefaultWeights] },
     };
 
-    [Theory(Skip = Needs)]
+    [Theory]
     [MemberData(nameof(MigratedWeights))]
     public void MigratesWeightsBeforeScheduling(FsrsVersion version, double[] weights)
     {
@@ -314,7 +317,7 @@ public class DefaultSchedulerLegacyParityTests
         ExpectFullParity(scheduler.Review(card, Rating.Good, Now), Review(options, card, Now, Rating.Good));
     }
 
-    [Fact(Skip = Needs)]
+    [Fact]
     public void HonorsDesiredRetentionAndRemainsEqualToTheLegacyScheduler()
     {
         var baseCard = CreateStateCard(State.Review);
@@ -333,7 +336,7 @@ public class DefaultSchedulerLegacyParityTests
         low.Card.ScheduledDays.Should().BeGreaterThan(high.Card.ScheduledDays);
     }
 
-    [Fact(Skip = Needs)]
+    [Fact]
     public void SnapshotsMutableLearningStepParametersBeforeLazyPreviewIteration()
     {
         List<string> learningSteps = ["1m"];
