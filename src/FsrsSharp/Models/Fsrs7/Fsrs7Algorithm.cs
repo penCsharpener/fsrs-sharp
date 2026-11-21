@@ -203,6 +203,8 @@ public sealed class Fsrs7Algorithm
     }
 
     /// <param name="memoryState">The state before the review; <c>null</c> for a brand-new card.</param>
+    /// <param name="elapsedDays">Days since the previous review (fractional).</param>
+    /// <param name="rating">The grade pressed.</param>
     /// <param name="retrievability">Pre-computed mixed retrievability (must be in (0,1)), if known.</param>
     public Fsrs7State NextState(Fsrs7State? memoryState, double elapsedDays, Rating rating, double? retrievability = null)
     {
