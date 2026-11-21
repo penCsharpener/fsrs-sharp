@@ -15,8 +15,8 @@ public enum State
 /// <summary>
 /// The rating a learner gives a card during a review.
 /// <see cref="Manual"/> is only used for manually-edited history entries (see
-/// <see cref="Fsrs.Rollback"/> / <see cref="Fsrs.Forget"/>) and can never be
-/// passed to <see cref="Fsrs.Next"/>.
+/// <see cref="Legacy.Fsrs.Rollback"/> / <see cref="Legacy.Fsrs.Forget"/>) and can never be
+/// passed to <see cref="Legacy.Fsrs.Next"/>.
 /// </summary>
 public enum Rating
 {

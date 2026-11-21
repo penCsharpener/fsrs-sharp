@@ -10,6 +10,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Lets the legacy version test compare Constants.FsrsVersion against the TsFsrsVersion in Directory.Build.props. -->
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>TsFsrsVersion</_Parameter1>
+      <_Parameter2>$(TsFsrsVersion)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../src/FsrsSharp/FsrsSharp.csproj" />
   </ItemGroup>
 
