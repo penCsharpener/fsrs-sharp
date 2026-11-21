@@ -6,6 +6,13 @@ scheduler built from models, chronos and middlewares, and the v5-style legacy AP
 
 The NuGet version tracks the ts-fsrs release it ports, so `FsrsSharp 6.0.0` is ts-fsrs `6.0.0`.
 
+**Upstream base:** ts-fsrs tag [`v6.0.0`](https://github.com/open-spaced-repetition/ts-fsrs/tree/v6.0.0),
+commit [`b69d6ca2dca55579198c913fd55a43d6bf703b34`](https://github.com/open-spaced-repetition/ts-fsrs/commit/b69d6ca2dca55579198c913fd55a43d6bf703b34)
+(2026-10-27). The port started from an earlier C# port of tag `v5.4.1`
+(commit [`bfc0a1960dfde4b4627ae4f4c8757b9211314963`](https://github.com/open-spaced-repetition/ts-fsrs/commit/bfc0a1960dfde4b4627ae4f4c8757b9211314963)),
+which was then upgraded to v6.0.0. When syncing with a newer ts-fsrs release, diff upstream from
+the base commit above and update this section.
+
 FsrsSharp is MIT-licensed and a derivative of ts-fsrs. See [LICENSE](LICENSE) and
 [LICENSE-ts-fsrs](LICENSE-ts-fsrs).
 
