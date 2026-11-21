@@ -35,10 +35,10 @@ entirely custom scheduler class) and the `Date.prototype` convenience extensions
 
 - Dates are plain `DateTime` rather than `Date | number | string` — no `DateInput`/`TypeConvert`
   layer, since C#'s type system already gives you that.
-- ts-fsrs mutates `fsrs.parameters` through a JS `Proxy` (assigning `f.parameters.w = [...]`
-  recomputes derived state as a side effect). C# has no equivalent, so call
-  `fsrs.UpdateParameters(new FsrsParametersInput { ... })` instead — the `Parameters` getter
-  returns a read-only snapshot.
+- ts-fsrs's `fsrs.parameters = {...}` is `fsrs.UpdateParameters(new FsrsParametersInput { ... })`;
+  assigning individual fields of `fsrs.Parameters` (`W`, `EnableShortTerm`) is live, like the JS `Proxy`.
+- The legacy API lives in the `FsrsSharp.Legacy` namespace (upstream `src/legacy`); its date helpers are
+  `LegacyHelpers` (`Helpers.JsRound` stays in `FsrsSharp`). `get_retrievability` is now `Retrievability`.
 - The generic `afterHandler` result-mapping parameter (`f.repeat(card, now, myMapper)`) is
   dropped; map `RecordLog`/`RecordLogItem` yourself, C# doesn't need the indirection.
 - Rounding matches JavaScript's `Math.round` (half rounds toward +∞), not .NET's default
